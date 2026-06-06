@@ -13,7 +13,6 @@ def is_admin():
 
 if not is_admin():
     print("Запрос прав администратора...")
-    # Перезапускаем этот же скрипт, но с запросом UAC
     ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
     sys.exit()
 # ----------------------------------------

@@ -3,7 +3,8 @@ import os
 import sys
 import json
 import base64
-import urllib.parse  # <--- Та самая библиотека для парсинга URL
+import urllib.parse
+import urllib.request  # <--- Добавили модуль для скачивания динамических ключей
 
 
 class VPNManager:
@@ -15,29 +16,54 @@ class VPNManager:
 
     def _parse_ss_key(self):
         try:
-            clean_key = self.vpn_key.replace("ssconf://", "").replace("ss://", "")
+            # --- ЛОГИКА ДЛЯ ДИНАМИЧЕСКИХ КЛЮЧЕЙ (ДЯДЯ ВАНЯ / OUTLINE) ---
+            if self.vpn_key.startswith("ssconf://"):
+                # Превращаем ssconf в обычную ссылку
+                url = self.vpn_key.replace("ssconf://", "https://")
+                if "#" in url:
+                    url = url.split("#")[0]
 
-            if "#" in clean_key:
-                clean_key = clean_key.split("#")[0]
+                print("Скачиваем актуальный конфиг с сервера VPN...")
 
-            clean_key = urllib.parse.unquote(clean_key)
-            clean_key = clean_key.replace("-", "+").replace("_", "/")
+                # Притворяемся обычным браузером и скачиваем настройки
+                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req) as response:
+                    data = json.loads(response.read().decode('utf-8'))
 
-            padding_needed = len(clean_key) % 4
-            if padding_needed:
-                clean_key += "=" * (4 - padding_needed)
+                server = data.get("server")
+                port = data.get("server_port")
+                method = data.get("method")
+                password = data.get("password")
 
-            decoded_bytes = base64.b64decode(clean_key)
-            decoded_str = decoded_bytes.decode('utf-8')
+                if not all([server, port, method, password]):
+                    print("Ошибка: Провайдер вернул пустой или неполный конфиг.")
+                    return False
 
-            if '@' not in decoded_str:
-                print("Ошибка: Неверный формат расшифрованного ключа.")
-                return False
+            # --- ЛОГИКА ДЛЯ ОБЫЧНЫХ КЛЮЧЕЙ СТАТИЧНОГО SHADOWSOCKS ---
+            else:
+                clean_key = self.vpn_key.replace("ss://", "")
+                if "#" in clean_key:
+                    clean_key = clean_key.split("#")[0]
 
-            auth_part, server_part = decoded_str.split('@')
-            method, password = auth_part.split(':', 1)
-            server, port = server_part.split(':')
+                # Формат SIP002: base64(method:password)@server:port
+                if "@" in clean_key and not clean_key.endswith("="):
+                    auth_b64, server_part = clean_key.split("@", 1)
+                    pad = len(auth_b64) % 4
+                    if pad: auth_b64 += "=" * (4 - pad)
+                    auth_part = base64.b64decode(auth_b64).decode('utf-8')
+                    method, password = auth_part.split(':', 1)
+                    server, port = server_part.split(':')
+                else:
+                    clean_key = urllib.parse.unquote(clean_key)
+                    clean_key = clean_key.replace("-", "+").replace("_", "/")
+                    pad = len(clean_key) % 4
+                    if pad: clean_key += "=" * (4 - pad)
+                    decoded_str = base64.b64decode(clean_key).decode('utf-8')
+                    auth_part, server_part = decoded_str.split('@')
+                    method, password = auth_part.split(':', 1)
+                    server, port = server_part.split(':')
 
+            # --- СОБИРАЕМ ФИНАЛЬНЫЙ КОНФИГ ДЛЯ XRAY ---
             config = {
                 "inbounds": [{
                     "port": 10808,

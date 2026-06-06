@@ -1,5 +1,24 @@
-import customtkinter as ctk
+import ctypes
+import sys
 import os
+
+
+# --- БЛОК ЗАПРОСА ПРАВ АДМИНИСТРАТОРА ---
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+
+if not is_admin():
+    print("Запрос прав администратора...")
+    # Перезапускаем этот же скрипт, но с запросом UAC
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+    sys.exit()
+# ----------------------------------------
+
+import customtkinter as ctk
 from dotenv import load_dotenv
 from core.dpi_manager import DPIManager
 from core.vpn_manager import VPNManager
@@ -16,11 +35,9 @@ class App(ctk.CTk):
         self.geometry("400x500")
         self.resizable(False, False)
 
-        # ВОТ ЭТИ СТРОКИ ПОТЕРЯЛИСЬ: Инициализируем "мозги"
         self.dpi = DPIManager()
         self.vpn = VPNManager(VPN_KEY)
 
-        # GUI элементы
         self.label_title = ctk.CTkLabel(self, text="DPI & VPN Control", font=ctk.CTkFont(size=20, weight="bold"))
         self.label_title.pack(pady=(20, 10))
 
@@ -48,8 +65,6 @@ class App(ctk.CTk):
             dpi_success = True
             vpn_success = True
 
-            print(f"Запускаем... DPI: {self.switch_dpi.get()}, VPN: {self.switch_vpn.get()}")
-
             if self.switch_dpi.get():
                 dpi_success = self.dpi.start()
 
@@ -59,23 +74,19 @@ class App(ctk.CTk):
             if dpi_success and vpn_success:
                 self.label_status.configure(text="Статус: Подключено", text_color="green")
                 self.btn_connect.configure(text="ОТКЛЮЧИТЬ", fg_color="red")
-                # Блокируем ползунки
                 self.switch_dpi.configure(state="disabled")
                 self.switch_vpn.configure(state="disabled")
                 self.is_connected = True
         else:
-            print("Останавливаем процессы...")
             self.dpi.stop()
             self.vpn.stop()
 
             self.label_status.configure(text="Статус: Отключено", text_color="red")
             self.btn_connect.configure(text="ПОДКЛЮЧИТЬ", fg_color=['#3a7ebf', '#1f538d'])
-            # Разблокируем ползунки
             self.switch_dpi.configure(state="normal")
             self.switch_vpn.configure(state="normal")
             self.is_connected = False
 
-    # Корректное завершение при закрытии окна на крестик
     def destroy(self):
         if hasattr(self, 'dpi'):
             self.dpi.stop()

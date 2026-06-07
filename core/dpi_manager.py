@@ -10,7 +10,7 @@ class DPIManager:
         # Получаем путь к папке zapret, чтобы процесс видел лежащие там .bin файлы
         self.work_dir = os.path.dirname(self.bin_path)
 
-        # Мощная стратегия обхода (фейковые TLS и QUIC пакеты + фрагментация)
+        # Усиленная стратегия обхода для ВСЕХ сайтов (без hostlist)
         self.args = [
             "--wf-tcp=80,443", "--wf-udp=443",
             "--filter-udp=443", "--dpi-desync=fake", "--dpi-desync-repeats=6",
